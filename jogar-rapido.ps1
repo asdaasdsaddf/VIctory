@@ -1,10 +1,12 @@
 # jogar.ps1 plus the speed switches (test). Log: run-rapido.log
-# (RTX 5070 12 GB, Ryzen 5 5600). Usage: right-click > Run with PowerShell, or
-#   powershell -ExecutionPolicy Bypass -File C:\Users\julio\VIctory-fx\jogar.ps1
+# (tested on RTX 5070 12 GB, Ryzen 5 5600). Usage: right-click > Run with PowerShell, or
+#   powershell -ExecutionPolicy Bypass -File .jogar-rapido.ps1 -Game "D:JogosGTA6game_scarlett_master.exe"
 
+param([string]$Game = $env:GTA6_EXE)
 $ErrorActionPreference = 'Stop'
-$root = 'C:\Users\julio\VIctory-fx'
-$game = 'C:\Users\julio\Downloads\GTA6.Xbox.v1.0.2.1-CYBERLEEK\game_scarlett_master.exe'
+$root = $PSScriptRoot
+if (-not $Game) { $Game = Read-Host "Caminho completo do game_scarlett_master.exe" }
+$game = $Game
 $exe  = Join-Path $root 'target\release\victory.exe'
 
 if (Get-Process victory -ErrorAction SilentlyContinue) {
