@@ -27,6 +27,7 @@ foreach ($v in 'VICTORY_BVH_BUILDER','VICTORY_BVH_QUARANTINE','VICTORY_FIRSTLANE
                'VICTORY_WIDE_BACK','VICTORY_CARD_BUFFERS_MIN_MB','VICTORY_CARD_BUFFERS_MB','VICTORY_DISPLAY_MODE') {
     Remove-Item "Env:$v" -ErrorAction SilentlyContinue
 }
+$env:VICTORY_TEXTURE_CATCHUP   = '0'  # catch-up sends ~600 MB of textures a frame after a load: 0.2 fps for minutes
 $env:VICTORY_LATE_WAIT         = '1'
 $env:VICTORY_RELAY             = '2'
 $env:VICTORY_SHADER_LOOP_LIMIT = '256'
