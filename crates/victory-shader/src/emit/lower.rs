@@ -7326,7 +7326,6 @@ impl<'a> Lower<'a> {
                 let halves = self.exchange.as_ref().is_some_and(|e| !e.1) && !self.local;
                 let r = if halves && !alike {
                     if !self.all_lanes(self.cur_ir) {
-<<<<<<< HEAD
                         // shortcut: `VICTORY_FIRSTLANE_OWN=1` takes the host wave's own
                         // first lane, exact when the value is the same in every lane of
                         // the console wave (the ray-tracing builder's scans read a sum of
@@ -7335,9 +7334,7 @@ impl<'a> Lower<'a> {
                         if *OWN.get_or_init(|| std::env::var_os("VICTORY_FIRSTLANE_OWN").is_some_and(|v| v == "1")) {
                             return int(self, mine);
                         }
-=======
                         need(self.cur_ir);
->>>>>>> fxceless-new
                         return Err("a first-lane read where not every lane runs");
                     }
                     let c = self.cur;
