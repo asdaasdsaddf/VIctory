@@ -7099,48 +7099,6 @@ impl<'a> Lower<'a> {
                 let r = self.s.m.bin(c, Bin::Or, halves[0], hi);
                 int(self, r)
             }
-            "v_cvt_f32_f64" if v.omod == 0 && !v.clamp => {
-                // shortcut: done on the double's bits with 64-bit integers
-                // (the emitter has no 64-bit float type): round to nearest
-                // even; results below f32's normal range flush to a signed
-                // zero; NaN becomes a quiet NaN, too large becomes infinity.
-                let x = self.src64(inst, 0)?;
-                let i64t = self.s.m.int(64);
-                let k = |l: &mut Self, n: i64| l.s.m.int_const(i64t, n);
-                let (k63, k52, k29, k23, k31) = (k(self, 63), k(self, 52), k(self, 29), k(self, 23), k(self, 31));
-                let (kexp, kmant, krem, khalf) =
-                    (k(self, 0x7ff), k(self, 0xf_ffff_ffff_ffff), k(self, 0x1fff_ffff), k(self, 0x1000_0000));
-                let (kbias, kzero, kone, kmax) = (k(self, 1023 - 127), k(self, 0), k(self, 1), k(self, 255));
-                let (kinf, knan) = (k(self, 0x7f80_0000), k(self, 0x7fc0_0000));
-                let m = &mut self.s.m;
-                let sign = m.bin(c, Bin::LShr, x, k63);
-                let sign = m.bin(c, Bin::Shl, sign, k31);
-                let exp = m.bin(c, Bin::LShr, x, k52);
-                let exp = m.bin(c, Bin::And, exp, kexp);
-                let mant = m.bin(c, Bin::And, x, kmant);
-                let e = m.bin(c, Bin::Sub, exp, kbias);
-                let m23 = m.bin(c, Bin::LShr, mant, k29);
-                let rem = m.bin(c, Bin::And, mant, krem);
-                let base = m.bin(c, Bin::Shl, e, k23);
-                let base = m.bin(c, Bin::Or, base, m23);
-                let odd = m.bin(c, Bin::And, m23, kone);
-                let gt = m.cmp(c, pred::IUGT, rem, khalf);
-                let eq = m.cmp(c, pred::EQ, rem, khalf);
-                let tie = m.select(c, eq, odd, kzero);
-                let up = m.select(c, gt, kone, tie);
-                let normal = m.bin(c, Bin::Add, base, up);
-                let under = m.cmp(c, pred::SLE, e, kzero);
-                let over = m.cmp(c, pred::SGE, e, kmax);
-                let r = m.select(c, under, kzero, normal);
-                let r = m.select(c, over, kinf, r);
-                let special = m.cmp(c, pred::EQ, exp, kexp);
-                let is_nan = m.cmp(c, pred::NE, mant, kzero);
-                let nan_inf = m.select(c, is_nan, knan, kinf);
-                let r = m.select(c, special, nan_inf, r);
-                let r = m.bin(c, Bin::Or, r, sign);
-                let r = m.cast(c, Cast::Trunc, r, self.s.t.i32);
-                int(self, r)
-            }
             "v_cvt_f32_f16" if v.opsel == 0 => {
                 let a = s(self, 0)?;
                 let r = self
