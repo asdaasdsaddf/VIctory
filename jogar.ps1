@@ -36,4 +36,6 @@ $log = Join-Path $root 'run.log'
 if (Test-Path $log) { Move-Item $log (Join-Path $root 'run-prev.log') -Force -ErrorAction SilentlyContinue }
 
 Set-Location $root
+# The emulator logs on stderr; with 'Stop' PowerShell 5.1 would end the run at its first line.
+$ErrorActionPreference = 'Continue'
 & $exe run $game --execute 2>&1 | Tee-Object -FilePath $log
