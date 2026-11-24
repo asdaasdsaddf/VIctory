@@ -5662,6 +5662,15 @@ impl<'a> Lower<'a> {
                 }
                 return Ok(());
             }
+            if std::env::var_os("VICTORY_DESC_WHY").is_some() {
+                eprintln!(
+                    "DESC-WHY {:#x} {} scalar={:?} lane_copied={}",
+                    inst.machine.offset,
+                    inst.name(),
+                    address,
+                    self.x.res.lane_copied.contains(&site)
+                );
+            }
             return Err("a descriptor read only as data");
         };
         let src = Source::Loaded { load: site, first };
