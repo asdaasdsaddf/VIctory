@@ -22,11 +22,11 @@ if ($hogs) {
 }
 
 # Switches that hurt on this PC (pipelines built very slowly, builder crashes the game).
+# VICTORY_DISPLAY_MODE=1920x1080 turns the indoor lighting off in GTA VI (tested 2026-11-24): leave it unset.
 foreach ($v in 'VICTORY_BVH_BUILDER','VICTORY_BVH_QUARANTINE','VICTORY_FIRSTLANE_OWN','VICTORY_FIRST_HALF',
-               'VICTORY_WIDE_BACK','VICTORY_CARD_BUFFERS_MIN_MB','VICTORY_CARD_BUFFERS_MB') {
+               'VICTORY_WIDE_BACK','VICTORY_CARD_BUFFERS_MIN_MB','VICTORY_CARD_BUFFERS_MB','VICTORY_DISPLAY_MODE') {
     Remove-Item "Env:$v" -ErrorAction SilentlyContinue
 }
-$env:VICTORY_DISPLAY_MODE      = '1920x1080'  # screen buffers at 1080p: frees video memory
 $env:VICTORY_LATE_WAIT         = '1'
 $env:VICTORY_RELAY             = '2'
 $env:VICTORY_SHADER_LOOP_LIMIT = '256'
