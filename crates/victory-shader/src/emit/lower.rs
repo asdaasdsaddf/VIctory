@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::UserData;
-use super::bitcode::{Attr, Bin, Cast, Rmw, Term, V, pred};
+use super::bitcode::{Attr, Bin, Cast, Rmw, Tag, Term, V, pred};
 use super::container::SigElement;
 use super::shader::{Shader, flags};
 use crate::ShaderError;
@@ -1063,8 +1063,8 @@ pub(super) fn reads_mask_as_data(st: &Structured, i: &Inst) -> bool {
 /// second row. An element that shares a register behind another one (the
 /// signature packs a short element into the free columns of an earlier
 /// register) is NOT in that row's halves: it follows in the first
-/// parameter, in row order, that has whole dwords left. Grand Theft Auto
-/// VI's packed pedestrian shaders show both cases: TEXCOORD7 (register 1,
+/// parameter, in row order, that has whole dwords left.
+/// The title's packed pedestrian shaders show both cases: TEXCOORD7 (register 1,
 /// columns 2-3, behind the two columns of TEXCOORD0) is exported in dword 3
 /// of parameter 0, after TEXCOORD1's two dwords; TEXCOORD6 (register 4,
 /// column 3, behind the three columns of TEXCOORD4) in dword 3 of
@@ -2732,6 +2732,7 @@ impl<'a> Lower<'a> {
         let page = self
             .s
             .op(c, "binary.i32", Attr::ReadNone, i32t, 40, &[page, last]);
+        self.s.m.tag(page, Tag::Clamp);
         let k3 = k(self, 3);
         let at = self.s.m.bin(c, Bin::Shl, page, k3);
         let directory = self.s.root_srv_handle(SLOT_MEMORY);
@@ -3874,7 +3875,9 @@ impl<'a> Lower<'a> {
                     // The validator refuses reads of undef.
                     _ => self.s.m.i32(0),
                 };
-                self.s.m.select(self.cur, g, x, old)
+                let v = self.s.m.select(self.cur, g, x, old);
+                self.s.m.tag(v, Tag::Guard);
+                v
             }
             _ => x,
         };
@@ -4344,8 +4347,8 @@ impl<'a> Lower<'a> {
         if name == "ds_bpermute_b32" {
             // Backward permute: no LDS is touched. Each lane takes the data
             // register of the lane its address names, (address + offset) / 4
-            // within the wave; a source lane outside EXEC gives 0. (Grand
-            // Theft Auto VI's checkerboard shadow-mask generators read their
+            // within the wave; a source lane outside EXEC gives 0. (
+            // the title's checkerboard shadow-mask generators read their
             // neighbours' samples with it; without them every shadowed light
             // was multiplied by an empty mask.)
             // shortcut: a source lane that is not at this instruction on the
@@ -5430,8 +5433,8 @@ impl<'a> Lower<'a> {
         // heap holds a buffer view there, not a constant buffer: read as
         // raw bytes, as a table's SRV is below. Read as a constant buffer
         // (the host's validation: "Descriptor Type in Heap: SRV, Register
-        // Type: CBV", heap index 17) the loads gave nothing: Grand Theft
-        // Auto VI's meshlet culling (BatchCullMeshlets,
+        // Type: CBV", heap index 17) the loads gave nothing:
+        // the title's meshlet culling (BatchCullMeshlets,
         // BatchCullPreSkinnedMeshlets, BatchCullBatchCSMeshlets) reads its
         // batch records, mesh headers and instance transforms this way, so
         // it passed no meshlet and every indirect mesh draw ran empty.
@@ -6271,6 +6274,7 @@ impl<'a> Lower<'a> {
         let last = self.s.m.i32(super::shader::SLOT_STRIDES_COUNT - 1);
         let i32t = self.s.t.i32;
         let slot = self.s.op(c, "binary.i32", Attr::ReadNone, i32t, 40, &[slot, last]);
+        self.s.m.tag(slot, Tag::Clamp);
         let two = self.s.m.i32(2);
         let byte = self.s.m.bin(c, Bin::Shl, slot, two);
         let h = self.s.root_srv_handle(super::shader::SLOT_STRIDES);
@@ -7398,16 +7402,26 @@ impl<'a> Lower<'a> {
                         return Err("a first-lane read where not every lane runs");
                     }
                     let c = self.cur;
-                    let i32t = self.s.t.i32;
-                    let has = self.s.m.cast(c, Cast::ZExt, any, i32t);
-                    let (lo_has, hi_has) = self.exchange_halves(c, has);
-                    let (lo, hi) = self.exchange_halves(c, mine);
-                    let z = self.s.m.i32(0);
-                    let in_lo = self.s.m.cmp(c, pred::NE, lo_has, z);
-                    let in_hi = self.s.m.cmp(c, pred::NE, hi_has, z);
-                    // neither half has a lane in EXEC: the console reads lane 0
-                    let hi = self.s.m.select(c, in_hi, hi, lo);
-                    self.s.m.select(c, in_lo, lo, hi)
+                    if guard.is_none() && super::shader_opt() & super::bitcode::opt::FIRST != 0 {
+                        // Every lane is in EXEC: the console's first lane is
+                        // lane 0, which the lower half of every console wave
+                        // has. No half needs to ask the other whether it has
+                        // a lane (an exchange of the constant 1: two group
+                        // barriers), and the lower half's value is the answer.
+                        let (lo, _) = self.exchange_halves(c, mine);
+                        lo
+                    } else {
+                        let i32t = self.s.t.i32;
+                        let has = self.s.m.cast(c, Cast::ZExt, any, i32t);
+                        let (lo_has, hi_has) = self.exchange_halves(c, has);
+                        let (lo, hi) = self.exchange_halves(c, mine);
+                        let z = self.s.m.i32(0);
+                        let in_lo = self.s.m.cmp(c, pred::NE, lo_has, z);
+                        let in_hi = self.s.m.cmp(c, pred::NE, hi_has, z);
+                        // neither half has a lane in EXEC: the console reads lane 0
+                        let hi = self.s.m.select(c, in_hi, hi, lo);
+                        self.s.m.select(c, in_lo, lo, hi)
+                    }
                 } else {
                     mine
                 };
@@ -9687,8 +9701,8 @@ impl<'a> Lower<'a> {
                         // are read at the level instead, in the gather's
                         // order: (u0,v1) (u1,v1) (u1,v0) (u0,v0).
                         // With an offset too (`image_gather4_l_o`): the
-                        // offset is in texels of that level. Grand Theft
-                        // Auto VI's meshlet culling takes a 4x4 block of
+                        // offset is in texels of that level.
+                        // The title's meshlet culling takes a 4x4 block of
                         // the pyramid as one gather and three offset ones
                         // ((2,0), (0,2), (2,2)); the three read level 0,
                         // two texels beside the first one's place, so a
@@ -10774,6 +10788,8 @@ impl<'a> Lower<'a> {
         let (phi, _) = self.counters[&to];
         let one = self.s.m.i32(1);
         let next = self.s.m.bin(c, Bin::Add, phi, one);
+        self.s.m.tag(phi, Tag::Counter);
+        self.s.m.tag(next, Tag::Counter);
         // Per stage unless the switch names one: a loop that never meets its
         // exit (a count read from a buffer the host has not got yet, say)
         // runs to the limit in every lane. A million iterations a pixel
@@ -10797,7 +10813,9 @@ impl<'a> Lower<'a> {
             .expect("header")
             .1
             .push((next, c));
-        self.s.m.cmp(c, p, next, limit)
+        let over = self.s.m.cmp(c, p, next, limit);
+        self.s.m.tag(over, Tag::Counter);
+        over
     }
 
     /// The block a lane stopped by [`LOOP_LIMIT`] leaves through.
@@ -11047,7 +11065,7 @@ mod tests {
         assert_eq!(p.get(&5), None);
     }
 
-    /// The packed pedestrian layouts of Grand Theft Auto VI: an element
+    /// The packed pedestrian layouts of the title: an element
     /// behind another one in its register follows in the first parameter
     /// with a dword left, and is not a half of its register's row.
     #[test]
